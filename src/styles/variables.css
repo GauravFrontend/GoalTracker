@@ -1,0 +1,75 @@
+:root {
+  /* Color Palette - Girlish Cool Pink */
+  --bg-app: #FFF0F5;
+  /* Lavender Blush - Soft background */
+  --card-bg: #FFFFFF;
+  /* Pure White */
+
+  --primary: #FF69B4;
+  /* Hot Pink - Main actions/active states */
+  --primary-hover: #FF1493;
+  /* Deep Pink - Hover states */
+  --secondary: #FFB6C1;
+  /* Light Pink - Accents/subtle highlights */
+  --accent: #FFD1DC;
+  /* Pastel Pink - Background elements */
+
+  --text-main: #C71585;
+  /* Medium Raspberry - Headings/Important text */
+  --text-muted: #DB7093;
+  /* Pale Violet Red - Secondary text */
+
+  --success: #98FB98;
+  /* Pale Green - Success states (subtle) */
+  --neutral-gray: #F5F5F5;
+  /* White Smoke - Empty states */
+
+  /* Shadows */
+  --shadow-soft: 0 4px 20px rgba(255, 105, 180, 0.15);
+  --shadow-hover: 0 8px 30px rgba(255, 105, 180, 0.25);
+
+  /* Border Radius */
+  --radius-lg: 24px;
+  --radius-md: 16px;
+  --radius-sm: 8px;
+
+  /* Heatmap Specific */
+  --heatmap-empty: #FFE4E1;
+  /* MistyRose - Visible empty state */
+  --heatmap-l1: #FFC0CB;
+  /* Pink */
+  --heatmap-l2: #FF69B4;
+  /* Hot Pink */
+  --heatmap-l3: #C71585;
+  /* Medium Violet Red */
+  --heatmap-l4: #8B008B;
+  /* Dark Magenta */
+}
+
+body {
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  font-family: 'Quicksand', 'Nunito', sans-serif;
+  /* Fallback will be system fonts until we load Google Fonts */
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* Scrollbar styling for a polished look */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-app);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--secondary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
