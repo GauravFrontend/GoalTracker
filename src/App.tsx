@@ -5,6 +5,7 @@ import { Plus, Sparkles, Menu, X } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 
 import { dummyGoals } from './data/dummyGoals';
+import { CustomizationModal } from './components/CustomizationModal';
 
 interface Goal {
   id: string;
@@ -133,6 +134,83 @@ function App() {
     return { streak, totalDaysDone };
   };
 
+  // -- Image Customization Logic --
+  // -- Customization Logic --
+  // Stores simple strings: "linear-gradient...", "#ff0000", or "url(data:...)"
+  const [dateStyles, setDateStyles] = useState<Record<string, string>>({});
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  // Load Styles Logic
+  useEffect(() => {
+    // Checking for old 'images' key first for backward compat, then 'styles'
+    const savedImages = localStorage.getItem('goal-tracker-images');
+    const savedStyles = localStorage.getItem('goal-tracker-styles');
+
+    if (savedStyles) {
+      try {
+        setDateStyles(JSON.parse(savedStyles));
+      } catch (e) { console.error("Failed to load styles", e); }
+    } else if (savedImages) {
+      // Migration from previous step (images -> url(image))
+      try {
+        const images = JSON.parse(savedImages);
+        const styles: Record<string, string> = {};
+        Object.keys(images).forEach(k => {
+          styles[k] = `url(${images[k]})`;
+        });
+        setDateStyles(styles);
+      } catch (e) { }
+    }
+  }, []);
+
+  // Save Styles Logic
+  useEffect(() => {
+    localStorage.setItem('goal-tracker-styles', JSON.stringify(dateStyles));
+  }, [dateStyles]);
+
+  const handleCellClick = (dateStr: string) => {
+    // User requirement: "only for those who are completed"
+    const isCompleted = goals.some(g => g.completedDates.includes(dateStr));
+    if (!isCompleted) return; // Do nothing if not completed
+
+    setSelectedDate(dateStr);
+    setIsModalOpen(true);
+  };
+
+  const handleSelectBackground = (bg: string) => {
+    if (!selectedDate) return;
+    setDateStyles(prev => ({
+      ...prev,
+      [selectedDate]: bg
+    }));
+  };
+
+  const handleUploadRequest = () => {
+    // Modal closes, file picker opens
+    fileInputRef.current?.click();
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !selectedDate) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result as string;
+      setDateStyles(prev => ({
+        ...prev,
+        [selectedDate]: `url(${base64})`
+      }));
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // -- End Customization Logic --
+
   const { streak: globalStreak, totalDaysDone } = calculateStats();
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -142,6 +220,22 @@ function App() {
 
   return (
     <div className="app-layout">
+      <CustomizationModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSelectBackground={handleSelectBackground}
+        onUploadRequest={handleUploadRequest}
+        currentStyle={selectedDate ? dateStyles[selectedDate] : undefined}
+      />
+
+      {/* Hidden File Input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        style={{ display: 'none' }}
+        accept="image/*"
+        onChange={handleImageUpload}
+      />
       {/* Mobile Overlay */}
       <div
         className={`mobile-overlay ${isSidebarOpen ? 'open' : ''}`}
@@ -220,7 +314,11 @@ function App() {
               <span className="total-badge">✨ {totalDaysDone} Days Total</span>
             </div>
           </div>
-          <Heatmap completedDates={allCompletedDates} />
+          <Heatmap
+            completedDates={allCompletedDates}
+            dateStyles={dateStyles}
+            onDayClick={handleCellClick}
+          />
         </div>
 
         <div className="goals-section">

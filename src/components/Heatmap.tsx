@@ -4,17 +4,17 @@ import '../styles/variables.css';
 
 interface HeatmapProps {
   completedDates: string[]; // ISO date strings
-  daysToShow?: number; // Ignored in favor of week logic now for better alignment
+  daysToShow?: number;
+  dateStyles?: Record<string, string>; // date -> CSS background property
+  onDayClick?: (dateStr: string) => void;
 }
 
-export const Heatmap: React.FC<HeatmapProps> = ({ completedDates }) => {
+export const Heatmap: React.FC<HeatmapProps> = ({ completedDates, dateStyles = {}, onDayClick }) => {
   const today = startOfToday();
 
   // Determine the end of the range.
-  // If we have completed dates in the future (for testing), show them.
   let rangeEnd = today;
   if (completedDates.length > 0) {
-    // efficient max finding
     const timestamps = completedDates.map(d => parseISO(d).getTime());
     const maxTimestamp = Math.max(...timestamps);
     if (maxTimestamp > today.getTime()) {
@@ -22,11 +22,10 @@ export const Heatmap: React.FC<HeatmapProps> = ({ completedDates }) => {
     }
   }
 
-  // Align to full weeks to ensure the grid looks correct (Row 1 = Sunday, Row 7 = Saturday)
+  // Align to full weeks
   const currentWeekEnd = endOfWeek(rangeEnd);
-  const startWeekStart = startOfWeek(subWeeks(today, 16)); // Show 16 weeks (~4 months) based on TODAY to keep history stable
+  const startWeekStart = startOfWeek(subWeeks(today, 16));
 
-  // Generate array of dates to show (oldest to newest)
   const dates = eachDayOfInterval({
     start: startWeekStart,
     end: currentWeekEnd,
@@ -34,7 +33,6 @@ export const Heatmap: React.FC<HeatmapProps> = ({ completedDates }) => {
 
   const getIntensity = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    // Count how many times this date appears in the completedDates array
     const count = completedDates.filter(d => d === dateStr).length;
 
     if (count === 0) return 'empty';
@@ -44,48 +42,34 @@ export const Heatmap: React.FC<HeatmapProps> = ({ completedDates }) => {
     return 'level-4';
   };
 
-  // Group dates by month for labels
+  // Group dates by month for labels (Simplified for brevity as logic remains same)
   const monthGroups: { month: string; startIndex: number }[] = [];
   let currentMonth = '';
 
   dates.forEach((date, index) => {
-    // Only add label if it's the start of the month OR the very first date
-    // We check if the month changed.
     const monthLabel = format(date, 'MMM');
     if (monthLabel !== currentMonth) {
-      // Logic adjustment: Since we are column-filling, the label should roughly align 
-      // with the column where the month starts.
-      // Index implies specific day. 
-      // index 0 = Sunday.
-
       monthGroups.push({ month: monthLabel, startIndex: index });
       currentMonth = monthLabel;
     }
   });
 
-  // Calculate how many columns (weeks) we have
   const numWeeks = Math.ceil(dates.length / 7);
 
   return (
     <div className="heatmap-container">
       <div className="heatmap-wrapper">
-        {/* Month labels */}
         <div
           className="month-labels"
-          style={{
-            gridTemplateColumns: `repeat(${numWeeks}, 12px)`
-          }}
+          style={{ gridTemplateColumns: `repeat(${numWeeks}, 12px)` }}
         >
           {monthGroups.map((group, idx) => {
             const weekIndex = Math.floor(group.startIndex / 7);
-            // If the label is too close to the end or previous, it might overlap, but CSS Grid handles placement.
             return (
               <div
                 key={idx}
                 className="month-label"
-                style={{
-                  gridColumn: `${weekIndex + 1} / span 2`, // Allow span to prevent cutoff
-                }}
+                style={{ gridColumn: `${weekIndex + 1} / span 2` }}
               >
                 {group.month}
               </div>
@@ -93,20 +77,32 @@ export const Heatmap: React.FC<HeatmapProps> = ({ completedDates }) => {
           })}
         </div>
 
-        {/* Heatmap grid */}
         <div className="heatmap-grid" style={{ gridTemplateColumns: `repeat(${numWeeks}, 12px)` }}>
           {dates.map((date) => {
+            const dateStr = format(date, 'yyyy-MM-dd');
             const intensity = getIntensity(date);
             const dateLabel = format(date, 'MMM do, yyyy');
+            const isToday = dateStr === format(today, 'yyyy-MM-dd');
 
-            // Highlight today
-            const isToday = format(date, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd');
+            const backgroundStyle = dateStyles[dateStr];
 
             return (
               <div
                 key={date.toString()}
                 className={`heatmap-cell ${intensity} ${isToday ? 'today' : ''}`}
                 title={dateLabel}
+                onClick={() => onDayClick && onDayClick(dateStr)}
+                style={backgroundStyle ? (
+                  backgroundStyle.startsWith('url') ? {
+                    backgroundImage: backgroundStyle,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    border: 'none'
+                  } : {
+                    background: backgroundStyle,
+                    border: 'none'
+                  }
+                ) : {}}
               />
             );
           })}
@@ -135,7 +131,6 @@ export const Heatmap: React.FC<HeatmapProps> = ({ completedDates }) => {
 
         .month-labels {
           display: grid;
-          /* Explicit columns to match grid below */
           grid-template-rows: auto;
           gap: 3px;
           margin-bottom: 6px;
@@ -147,15 +142,14 @@ export const Heatmap: React.FC<HeatmapProps> = ({ completedDates }) => {
           color: var(--text-muted);
           font-weight: 700;
           text-align: left;
-           /* Ensure text doesn't wrap awkwardly */
           white-space: nowrap;
           overflow: visible;
         }
         
         .heatmap-grid {
           display: grid;
-          grid-template-rows: repeat(7, 12px); /* 7 days a week */
-          grid-auto-flow: column; /* Fill columns first (weeks) */
+          grid-template-rows: repeat(7, 12px); 
+          grid-auto-flow: column; 
           gap: 3px;
         }
         
@@ -164,19 +158,18 @@ export const Heatmap: React.FC<HeatmapProps> = ({ completedDates }) => {
           height: 12px;
           border-radius: 2px;
           transition: all 0.2s ease;
+          cursor: pointer; /* Interaction hint */
         }
         
         .heatmap-cell:hover {
-          transform: scale(1.3);
-          border: 1px solid rgba(0,0,0,0.1);
+          transform: scale(1.5);
+          border: 1px solid rgba(0,0,0,0.2);
           z-index: 10;
           position: relative;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
-        .heatmap-cell.empty {
-          background-color: var(--heatmap-empty);
-        }
-        
+        .heatmap-cell.empty { background-color: var(--heatmap-empty); }
         .heatmap-cell.level-1 { background-color: var(--heatmap-l1); }
         .heatmap-cell.level-2 { background-color: var(--heatmap-l2); }
         .heatmap-cell.level-3 { background-color: var(--heatmap-l3); }
