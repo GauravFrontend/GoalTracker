@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { GoalCard } from './components/GoalCard';
 import { Heatmap } from './components/Heatmap';
 import { Plus, Sparkles, Menu, X } from 'lucide-react';
-import { format, addDays, parseISO } from 'date-fns';
+import { format, addDays } from 'date-fns';
 
 import { dummyGoals } from './data/dummyGoals';
 
