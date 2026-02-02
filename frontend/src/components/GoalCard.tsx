@@ -6,8 +6,10 @@ import { format } from 'date-fns';
 interface Goal {
   id: string;
   title: string;
-  completedDates: string[]; // ISO strings 'YYYY-MM-DD'
+  completedDates: string[];
   createdAt: string;
+  startDate?: string;
+  type?: 'one-time' | 'recurring';
 }
 
 interface GoalCardProps {
@@ -17,17 +19,29 @@ interface GoalCardProps {
 
 export const GoalCard: React.FC<GoalCardProps> = ({ goal, onToggleToday }) => {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const isCompleted = goal.completedDates.includes(goal.createdAt);
-  const isOverdue = goal.createdAt < todayStr;
+
+  // Use startDate if available, fallback to createdAt (legacy)
+  const displayDate = goal.startDate || goal.createdAt;
+
+  // Status Logic
+  const isCompleted = goal.completedDates.includes(displayDate) || (goal.type === 'recurring' && goal.completedDates.includes(todayStr));
+  const isFuture = displayDate > todayStr;
+  const isPast = displayDate < todayStr;
+  const isMissed = isPast && !isCompleted && goal.type !== 'recurring'; // Recurring goals are handled differently usually, but simple check here
 
   return (
     <div
-      className={`goal-card ${isCompleted ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}`}
+      className={`goal-card ${isCompleted ? 'completed' : ''} ${isMissed ? 'overdue' : ''}`}
       onClick={() => onToggleToday(goal.id)}
     >
       <div className="card-content">
         <h3 className="goal-title">{goal.title}</h3>
-        <p className="goal-date">{isOverdue && !isCompleted ? 'Missed • ' : ''}{goal.createdAt}</p>
+        <p className="goal-date">
+          {isMissed && 'Missed • '}
+          {isFuture && 'Upcoming • '}
+          {!isMissed && !isFuture && goal.type === 'recurring' && 'Dailies • '}
+          {displayDate}
+        </p>
       </div>
 
       <div className="action-wrapper">

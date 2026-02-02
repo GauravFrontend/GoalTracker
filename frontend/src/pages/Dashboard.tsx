@@ -368,30 +368,48 @@ export function Dashboard() {
                 </div>
 
                 <div className="sidebar-section">
-                    <h3>Missed Goals (Yesterday)</h3>
+                    <h3>Recent Missed Goals</h3>
                     <div className="sidebar-list">
-                        {/* Logic to find missed goals for Yesterday specifically, for simplicity */}
+                        {/* Logic to find missed goals for the past 7 days */}
                         {(() => {
-                            const yesterday = format(addDays(new Date(), -1), 'yyyy-MM-dd');
+                            const today = new Date();
+                            const missedInstances: { goal: Goal, date: string }[] = [];
 
-                            const missedGoals = goals.filter(g => {
-                                const isDone = g.completedDates.includes(yesterday);
-                                if (isDone) return false;
+                            // Check past 7 days (excluding today)
+                            for (let i = 1; i <= 7; i++) {
+                                const checkDate = format(addDays(today, -i), 'yyyy-MM-dd');
 
-                                if (g.type === 'one-time') return g.startDate === yesterday;
-                                if (g.type === 'recurring') return yesterday >= g.startDate && (!g.endDate || yesterday <= g.endDate);
-                                return false;
-                            });
+                                goals.forEach(g => {
+                                    // Check if this goal was active on 'checkDate'
+                                    let isActive = false;
+                                    if (g.type === 'one-time') {
+                                        isActive = g.startDate === checkDate;
+                                    } else if (g.type === 'recurring') {
+                                        isActive = checkDate >= g.startDate && (!g.endDate || checkDate <= g.endDate);
+                                    } else {
+                                        // Legacy support
+                                        isActive = g.createdAt === checkDate;
+                                    }
 
-                            if (missedGoals.length === 0) return <p className="empty-msg">No missed goals yesterday!</p>;
+                                    if (isActive) {
+                                        // Check if completed
+                                        const isDone = g.completedDates.includes(checkDate);
+                                        if (!isDone) {
+                                            missedInstances.push({ goal: g, date: checkDate });
+                                        }
+                                    }
+                                });
+                            }
 
-                            return missedGoals.map(g => (
-                                <div key={g.id} className="mini-goal-card">
-                                    <span className="mini-title">{g.title}</span>
-                                    <span className="mini-date">{yesterday}</span>
+                            if (missedInstances.length === 0) return <p className="empty-msg">No missed goals this week!</p>;
+
+                            return missedInstances.map((instance) => (
+                                <div key={`${instance.goal.id}-${instance.date}`} className="mini-goal-card">
+                                    <span className="mini-title">{instance.goal.title}</span>
+                                    <span className="mini-date" style={{ color: '#ef4444' }}>Missed • {instance.date}</span>
                                     <button
                                         className="mini-action"
-                                        onClick={() => handleCatchUp(g.id, yesterday)}
+                                        onClick={() => handleCatchUp(instance.goal.id, instance.date)}
                                         disabled={gems < 20}
                                         style={{ opacity: gems < 20 ? 0.5 : 1 }}
                                     >
