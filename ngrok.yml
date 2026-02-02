@@ -1,0 +1,7 @@
+version: "2"
+authtoken: 38ohv7qHIEO4zVMcfTKGvnVwLiq_5wWcYDH88LjD4cLKp771M
+tunnels:
+  goal-tracker:
+    proto: http
+    hostname: paulita-ungovernmental-subangulately.ngrok-free.dev
+    addr: 5000
