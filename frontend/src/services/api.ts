@@ -1,6 +1,6 @@
 // --- CONFIGURATION ---
 const IS_PROD = true; // Set to true to use the Ngrok URL
-const PROD_URL = 'https://paulita-ungovernmental-subangulately.ngrok-free.dev'; // Replace with your generated Ngrok URL
+const PROD_URL = 'https://paulita-ungovernmental-subangulately.ngrok-free.dev/api'; // Replace with your generated Ngrok URL
 const LOCAL_URL = 'http://localhost:5000/api';
 
 const BASE_URL = IS_PROD ? PROD_URL : LOCAL_URL;
