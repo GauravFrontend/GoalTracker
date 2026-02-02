@@ -5,46 +5,64 @@ const LOCAL_URL = 'http://localhost:5000/api';
 
 const BASE_URL = IS_PROD ? PROD_URL : LOCAL_URL;
 
+// Helper to add headers automatically
+const getHeaders = (isJson = false) => {
+    const headers: Record<string, string> = {
+        'ngrok-skip-browser-warning': 'true', // Bypasses ngrok warning page
+    };
+    if (isJson) {
+        headers['Content-Type'] = 'application/json';
+    }
+    return headers;
+};
+
 export const api = {
     // Auth endpoints
     login: async (credentials: any) => {
         const response = await fetch(`${BASE_URL}/login`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getHeaders(true),
             body: JSON.stringify(credentials),
         });
         return handleResponse(response);
     },
 
     getUser: async (userId: string) => {
-        const response = await fetch(`${BASE_URL}/me?userId=${userId}`);
+        const response = await fetch(`${BASE_URL}/me?userId=${userId}`, {
+            headers: getHeaders()
+        });
         return handleResponse(response);
     },
 
     register: async (credentials: any) => {
         const response = await fetch(`${BASE_URL}/register`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getHeaders(true),
             body: JSON.stringify(credentials),
         });
         return handleResponse(response);
     },
 
     logout: async () => {
-        const response = await fetch(`${BASE_URL}/logout`, { method: 'POST' });
+        const response = await fetch(`${BASE_URL}/logout`, {
+            method: 'POST',
+            headers: getHeaders()
+        });
         return handleResponse(response);
     },
 
     // Goal endpoints
     getGoals: async (userId: string) => {
-        const response = await fetch(`${BASE_URL}/goals?userId=${userId}`);
+        const response = await fetch(`${BASE_URL}/goals?userId=${userId}`, {
+            headers: getHeaders()
+        });
         return handleResponse(response);
     },
 
     createGoal: async (data: { userId: string, title: string, type?: 'one-time' | 'recurring', startDate?: string, endDate?: string }) => {
         const response = await fetch(`${BASE_URL}/goals`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getHeaders(true),
             body: JSON.stringify(data),
         });
         return handleResponse(response);
@@ -53,7 +71,7 @@ export const api = {
     toggleGoal: async (goalId: string, date: string) => {
         const response = await fetch(`${BASE_URL}/goals/${goalId}/toggle`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getHeaders(true),
             body: JSON.stringify({ date }),
         });
         return handleResponse(response);
@@ -62,7 +80,7 @@ export const api = {
     catchUp: async (goalId: string, date: string, userId: string) => {
         const response = await fetch(`${BASE_URL}/goals/${goalId}/catchup`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getHeaders(true),
             body: JSON.stringify({ date, userId }),
         });
         return handleResponse(response);
