@@ -6,14 +6,17 @@ import { format, addDays } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 
-import { dummyGoals } from '../data/dummyGoals';
+// Removed dummyGoals import
 import { CustomizationModal } from '../components/CustomizationModal';
 
 interface Goal {
     id: string;
     title: string;
     completedDates: string[];
-    createdAt: string; // YYYY-MM-DD
+    createdAt: string;
+    startDate: string;
+    endDate?: string;
+    type?: 'one-time' | 'recurring';
 }
 
 export function Dashboard() {
@@ -23,97 +26,101 @@ export function Dashboard() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const navigate = useNavigate();
 
+    // Get user from local storage
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+    // Load Goals
+    const loadGoals = async () => {
+        if (!user || !user.id) return;
+        try {
+            const data = await api.getGoals(user.id);
+            // Map _id to id
+            const formattedGoals = data.map((g: any) => ({
+                id: g._id,
+                title: g.title,
+                completedDates: g.completedDates,
+                createdAt: g.createdAt,
+                startDate: g.startDate,
+                endDate: g.endDate,
+                type: g.type || 'one-time'
+            }));
+            setGoals(formattedGoals);
+        } catch (error) {
+            console.error("Failed to load goals", error);
+        }
+    };
+
+    useEffect(() => {
+        if (!user || !user.id) {
+            navigate('/login');
+        } else {
+            loadGoals();
+        }
+    }, []);
+
     const handleLogout = async () => {
         try {
-            // Optional: Call backend to acknowledge logout
             await api.logout();
         } catch (error) {
             console.error("Logout API failed", error);
         }
-
-        // Clear local storage
         localStorage.removeItem('user');
-
-        // Redirect to login
         navigate('/login');
     };
 
-    // Load from LocalStorage on mount
-    useEffect(() => {
-        const saved = localStorage.getItem('goal-tracker-data');
-        console.log("Loading from LocalStorage:", saved);
-        console.log("Dummy Goals Import:", dummyGoals);
-
-        if (saved) {
-            try {
-                const parsedGoals = JSON.parse(saved);
-                console.log("Parsed Goals from Storage:", parsedGoals);
-                const validatedGoals = parsedGoals.map((g: any) => ({
-                    ...g,
-                    createdAt: g.createdAt || format(new Date(), 'yyyy-MM-dd')
-                }));
-                setGoals(validatedGoals);
-            } catch (e) {
-                console.error("Failed to load goals", e);
-            }
-        } else {
-            console.log("No data found, setting dummy goals");
-            setGoals(dummyGoals);
-        }
-    }, []);
-
-    // Save to LocalStorage whenever goals change
-    useEffect(() => {
-        localStorage.setItem('goal-tracker-data', JSON.stringify(goals));
-    }, [goals]);
-
-    const handleToggleToday = (goalId: string) => {
+    const handleToggleToday = async (goalId: string) => {
         const today = format(new Date(), 'yyyy-MM-dd');
+        const goal = goals.find(g => g.id === goalId);
+        if (!goal) return;
 
-        setGoals(currentGoals => currentGoals.map(goal => {
-            if (goal.id !== goalId) return goal;
-
+        try {
             if (goal.createdAt < today) {
-                // Catch up
-                return { ...goal, createdAt: today };
+                // "Catch Up" logic: Move goal to today
+                await api.updateGoal(goalId, { createdAt: today });
+                // We could just reload goals or optimistically update
+                // Reload is safer to sync state
+                await loadGoals();
             } else {
                 // Toggle completion
-                const targetDate = goal.createdAt;
-                const isCompleted = goal.completedDates.includes(targetDate);
+                const updatedGoal = await api.toggleGoal(goalId, today);
 
-                let newDates;
-                if (isCompleted) {
-                    newDates = goal.completedDates.filter(d => d !== targetDate);
-                } else {
-                    newDates = [...goal.completedDates, targetDate];
-                }
-                return { ...goal, completedDates: newDates };
+                // Update local state
+                setGoals(currentGoals => currentGoals.map(g => {
+                    if (g.id !== goalId) return g;
+                    return {
+                        ...g,
+                        completedDates: updatedGoal.completedDates
+                    };
+                }));
             }
-        }));
+        } catch (err) {
+            console.error("Failed to toggle goal", err);
+        }
     };
 
-    const handleAddGoal = (e: React.FormEvent) => {
+    const handleAddGoal = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newGoalTitle.trim()) return;
 
-        // PRODUCTION: Always create for Today
-        const today = format(new Date(), 'yyyy-MM-dd');
-
-        const newGoal: Goal = {
-            id: Date.now().toString(),
-            title: newGoalTitle,
-            completedDates: [],
-            createdAt: today
-        };
-
-        setGoals([...goals, newGoal]);
-        setNewGoalTitle('');
-        setShowAddForm(false);
+        try {
+            await api.createGoal({
+                userId: user.id,
+                title: newGoalTitle,
+                type: goalType,
+                startDate: startDate,
+                endDate: endDate || undefined
+            });
+            await loadGoals();
+            setNewGoalTitle('');
+            setEndDate('');
+            setShowAddForm(false);
+        } catch (err) {
+            console.error("Failed to create goal", err);
+            alert("Failed to create goal. Try again.");
+        }
     };
 
     const allCompletedDates = goals.flatMap(g => g.completedDates);
-
-
 
     // -- Streak & Stats Calculation --
     const calculateStats = () => {
@@ -127,19 +134,16 @@ export function Dashboard() {
         const totalDaysDone = uniqueDates.length;
 
         // Streak Logic
-        // 1. If no activity today OR yesterday, streak is broken -> 0
         if (!uniqueDates.includes(today) && !uniqueDates.includes(yesterday)) {
             return { streak: 0, totalDaysDone };
         }
 
         let streak = 0;
-        // Start checking from Today if active, otherwise start from Yesterday
         let checkDate = new Date();
         if (!uniqueDates.includes(format(checkDate, 'yyyy-MM-dd'))) {
             checkDate = addDays(checkDate, -1);
         }
 
-        // Loop backwards day by day
         while (true) {
             const dateStr = format(checkDate, 'yyyy-MM-dd');
             if (uniqueDates.includes(dateStr)) {
@@ -153,46 +157,35 @@ export function Dashboard() {
     };
 
     // -- Image Customization Logic --
-    // -- Customization Logic --
-    // Stores simple strings: "linear-gradient...", "#ff0000", or "url(data:...)"
     const [dateStyles, setDateStyles] = useState<Record<string, string>>({});
     const [isModalOpen, setIsModalOpen] = useState(false);
-
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-    // Load Styles Logic
+    // Load Styles Logic (Still LocalStorage as per original requirement for client-side visuals)
     useEffect(() => {
-        // Checking for old 'images' key first for backward compat, then 'styles'
         const savedImages = localStorage.getItem('goal-tracker-images');
         const savedStyles = localStorage.getItem('goal-tracker-styles');
 
         if (savedStyles) {
-            try {
-                setDateStyles(JSON.parse(savedStyles));
-            } catch (e) { console.error("Failed to load styles", e); }
+            try { setDateStyles(JSON.parse(savedStyles)); } catch (e) { }
         } else if (savedImages) {
-            // Migration from previous step (images -> url(image))
             try {
                 const images = JSON.parse(savedImages);
                 const styles: Record<string, string> = {};
-                Object.keys(images).forEach(k => {
-                    styles[k] = `url(${images[k]})`;
-                });
+                Object.keys(images).forEach(k => { styles[k] = `url(${images[k]})`; });
                 setDateStyles(styles);
             } catch (e) { }
         }
     }, []);
 
-    // Save Styles Logic
     useEffect(() => {
         localStorage.setItem('goal-tracker-styles', JSON.stringify(dateStyles));
     }, [dateStyles]);
 
     const handleCellClick = (dateStr: string) => {
-        // User requirement: "only for those who are completed"
         const isCompleted = goals.some(g => g.completedDates.includes(dateStr));
-        if (!isCompleted) return; // Do nothing if not completed
+        if (!isCompleted) return;
 
         setSelectedDate(dateStr);
         setIsModalOpen(true);
@@ -200,41 +193,60 @@ export function Dashboard() {
 
     const handleSelectBackground = (bg: string) => {
         if (!selectedDate) return;
-        setDateStyles(prev => ({
-            ...prev,
-            [selectedDate]: bg
-        }));
+        setDateStyles(prev => ({ ...prev, [selectedDate]: bg }));
     };
 
-    const handleUploadRequest = () => {
-        // Modal closes, file picker opens
-        fileInputRef.current?.click();
-    };
+    const handleUploadRequest = () => { fileInputRef.current?.click(); };
 
     const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file || !selectedDate) return;
-
         const reader = new FileReader();
         reader.onloadend = () => {
             const base64 = reader.result as string;
-            setDateStyles(prev => ({
-                ...prev,
-                [selectedDate]: `url(${base64})`
-            }));
+            setDateStyles(prev => ({ ...prev, [selectedDate]: `url(${base64})` }));
             if (fileInputRef.current) fileInputRef.current.value = '';
         };
         reader.readAsDataURL(file);
     };
 
-    // -- End Customization Logic --
-
     const { streak: globalStreak, totalDaysDone } = calculateStats();
 
+    const [goalType, setGoalType] = useState<'one-time' | 'recurring'>('one-time');
+    const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+    const [endDate, setEndDate] = useState('');
+
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const todayGoals = goals.filter(g => g.createdAt === todayStr);
-    const previousGoals = goals.filter(g => g.createdAt < todayStr);
-    const futureGoals = goals.filter(g => g.createdAt > todayStr);
+
+    // Filter Logic
+    const todayGoals = goals.filter(g => {
+        // If it's a one-time goal, it must match today's date
+        if (g.type === 'one-time') {
+            return g.startDate === todayStr;
+        }
+        // If it's recurring, today must be >= startDate AND (if endDate exists, <= endDate)
+        if (g.type === 'recurring') {
+            const afterStart = todayStr >= g.startDate;
+            const beforeEnd = !g.endDate || todayStr <= g.endDate;
+            return afterStart && beforeEnd;
+        }
+        // Fallback for legacy goals without type (assume daily/recurring meant for today)
+        return g.createdAt === todayStr;
+    });
+
+    // Upcoming logic: One-time goals in future OR Recurring starts in future
+    const futureGoals = goals.filter(g => {
+        if (g.type === 'one-time') return g.startDate > todayStr;
+        if (g.type === 'recurring') return g.startDate > todayStr;
+        return false;
+    });
+
+    const previousGoals = goals.filter(g => {
+        if (g.type === 'one-time') return g.startDate < todayStr;
+        // Recurring goals that ENDED before today
+        if (g.type === 'recurring') return g.endDate && g.endDate < todayStr;
+        return false;
+    });
 
     return (
         <div className="app-layout">
@@ -246,7 +258,6 @@ export function Dashboard() {
                 currentStyle={selectedDate ? dateStyles[selectedDate] : undefined}
             />
 
-            {/* Hidden File Input */}
             <input
                 type="file"
                 ref={fileInputRef}
@@ -254,13 +265,11 @@ export function Dashboard() {
                 accept="image/*"
                 onChange={handleImageUpload}
             />
-            {/* Mobile Overlay */}
             <div
                 className={`mobile-overlay ${isSidebarOpen ? 'open' : ''}`}
                 onClick={() => setIsSidebarOpen(false)}
             />
 
-            {/* Sidebar */}
             <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
                 <div className="sidebar-header">
                     <div className="brand">
@@ -289,27 +298,7 @@ export function Dashboard() {
                 </div>
 
                 <div style={{ padding: '20px 0', borderTop: '1px solid var(--accent)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <button
-                        onClick={() => {
-                            if (confirm('Replace current goals with demo data?')) {
-                                setGoals(dummyGoals);
-                                setIsSidebarOpen(false);
-                            }
-                        }}
-                        style={{
-                            width: '100%',
-                            padding: '10px',
-                            background: '#f0f0f0',
-                            border: 'none',
-                            borderRadius: '8px',
-                            fontSize: '0.9rem',
-                            cursor: 'pointer',
-                            color: '#666'
-                        }}
-                    >
-                        🔄 Load Demo Data
-                    </button>
-
+                    {/* Removed Load Demo Data button as we are fully API powered now */}
                     <button
                         onClick={handleLogout}
                         style={{
@@ -334,7 +323,6 @@ export function Dashboard() {
                 </div>
             </aside>
 
-            {/* Main Content */}
             <main className="main-content">
                 <header className="main-header">
                     <button className="menu-btn" onClick={() => setIsSidebarOpen(true)}>
@@ -375,7 +363,6 @@ export function Dashboard() {
                     </div>
                 </div>
 
-                {/* Render future goals if they exist (legacy), but removed testing label */}
                 {futureGoals.length > 0 && (
                     <div className="goals-section upcoming">
                         <h3>Upcoming</h3>
@@ -391,12 +378,29 @@ export function Dashboard() {
                     </div>
                 )}
 
-                {/* Add Goal Section */}
                 {showAddForm ? (
                     <div className="add-goal-overlay">
                         <div className="add-goal-card">
                             <form onSubmit={handleAddGoal}>
                                 <h3>Create New Goal</h3>
+
+                                <div className="type-toggle">
+                                    <button
+                                        type="button"
+                                        className={goalType === 'one-time' ? 'active' : ''}
+                                        onClick={() => setGoalType('one-time')}
+                                    >
+                                        One Time
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={goalType === 'recurring' ? 'active' : ''}
+                                        onClick={() => setGoalType('recurring')}
+                                    >
+                                        Recurring
+                                    </button>
+                                </div>
+
                                 <input
                                     autoFocus
                                     type="text"
@@ -405,6 +409,31 @@ export function Dashboard() {
                                     onChange={(e) => setNewGoalTitle(e.target.value)}
                                     className="goal-input"
                                 />
+
+                                <div className="date-inputs">
+                                    <div className="input-group">
+                                        <label>Start Date</label>
+                                        <input
+                                            type="date"
+                                            value={startDate}
+                                            onChange={(e) => setStartDate(e.target.value)}
+                                            required
+                                        />
+                                    </div>
+
+                                    {goalType === 'recurring' && (
+                                        <div className="input-group">
+                                            <label>End Date (Optional)</label>
+                                            <input
+                                                type="date"
+                                                value={endDate}
+                                                onChange={(e) => setEndDate(e.target.value)}
+                                                min={startDate}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+
                                 <div className="form-actions">
                                     <button type="button" onClick={() => setShowAddForm(false)} className="btn-cancel">Cancel</button>
                                     <button type="submit" className="btn-save">Create Goal</button>
@@ -742,6 +771,59 @@ export function Dashboard() {
            font-style: italic;
         }
         
+        .type-toggle {
+          display: flex;
+          background: #f0f0f0;
+          padding: 4px;
+          border-radius: 8px;
+          margin-bottom: 20px;
+        }
+        
+        .type-toggle button {
+          flex: 1;
+          padding: 8px;
+          border: none;
+          background: transparent;
+          font-weight: 600;
+          color: #666;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        
+        .type-toggle button.active {
+           background: white;
+           color: var(--primary);
+           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .date-inputs {
+           display: flex;
+           gap: 12px;
+           margin-bottom: 20px;
+        }
+        
+        .date-inputs .input-group {
+           flex: 1;
+           margin-bottom: 0;
+        }
+        
+        .date-inputs label {
+           display: block;
+           font-size: 0.8rem;
+           color: var(--text-muted);
+           margin-bottom: 4px;
+           font-weight: 600;
+        }
+        
+        .date-inputs input {
+           width: 100%;
+           padding: 10px;
+           border: 1px solid var(--neutral-gray);
+           border-radius: 6px;
+           font-family: inherit;
+        }
+
         .empty-msg {
            font-size: 0.9rem;
            color: var(--text-muted);

@@ -23,6 +23,39 @@ export const api = {
     logout: async () => {
         const response = await fetch(`${BASE_URL}/logout`, { method: 'POST' });
         return handleResponse(response);
+    },
+
+    // Goal endpoints
+    getGoals: async (userId: string) => {
+        const response = await fetch(`${BASE_URL}/goals?userId=${userId}`);
+        return handleResponse(response);
+    },
+
+    createGoal: async (data: { userId: string, title: string, type?: 'one-time' | 'recurring', startDate?: string, endDate?: string }) => {
+        const response = await fetch(`${BASE_URL}/goals`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        return handleResponse(response);
+    },
+
+    toggleGoal: async (goalId: string, date: string) => {
+        const response = await fetch(`${BASE_URL}/goals/${goalId}/toggle`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ date }),
+        });
+        return handleResponse(response);
+    },
+
+    updateGoal: async (id: string, updates: any) => {
+        const response = await fetch(`${BASE_URL}/goals/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates),
+        });
+        return handleResponse(response);
     }
 };
 
