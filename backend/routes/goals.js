@@ -36,7 +36,7 @@ router.post('/', async (req, res) => {
             type: type || 'one-time',
             startDate: effectiveStartDate,
             endDate: endDate || null,
-            createdAt: new Date().toISOString().split('T')[0], // Keep for backward compat or internal tracking
+            createdAt: effectiveStartDate, // Use start date as the 'creation'/'effective' date
             completedDates: []
         });
 
@@ -79,25 +79,11 @@ router.patch('/:id/toggle', async (req, res) => {
 
             // If reward not already claimed for this date
             if (user.lastDailyReward !== date) {
-                // Find all active goals for this date
-                // 1. One-time goals for this date
-                // 2. Recurring goals active during this date
-                const allGoals = await Goal.find({ userId: goal.userId });
-
-                const goalsForDate = allGoals.filter(g => {
-                    if (g.type === 'one-time') return g.startDate === date;
-                    if (g.type === 'recurring') return date >= g.startDate && (!g.endDate || date <= g.endDate);
-                    return false;
-                });
-
-                const allComplete = goalsForDate.every(g => g.completedDates.includes(date));
-
-                if (allComplete && goalsForDate.length > 0) {
-                    user.gems += 10;
-                    user.lastDailyReward = date;
-                    await user.save();
-                    newGemCount = user.gems;
-                }
+                // Grant reward immediately on FIRST completion
+                user.gems += 10;
+                user.lastDailyReward = date;
+                await user.save();
+                newGemCount = user.gems;
             }
         }
 

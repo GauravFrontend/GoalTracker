@@ -8,6 +8,7 @@ import { api } from '../services/api';
 
 // Removed dummyGoals import
 import { CustomizationModal } from '../components/CustomizationModal';
+import { Modal } from '../components/Modal';
 
 interface Goal {
     id: string;
@@ -81,36 +82,58 @@ export function Dashboard() {
     // We can just omit the variable destructuring if truly unused.
     const [, setLastDailyReward] = useState(user.lastDailyReward);
 
+    // Modal State
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        content: React.ReactNode;
+        type?: 'default' | 'success' | 'danger';
+        onConfirm?: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        content: null
+    });
+
+    const closeModal = () => setModalConfig(prev => ({ ...prev, isOpen: false }));
+
     const handleCatchUp = async (goalId: string, date: string) => {
         if (gems < 20) {
-            alert("Not enough gems! You need 20 gems to catch up.");
+            setModalConfig({
+                isOpen: true,
+                title: 'Insufficient Gems 💎',
+                content: <p>You need 20 gems to catch up on missed goals! Keep completing daily tasks to earn more.</p>,
+                type: 'danger'
+            });
             return;
         }
 
-        if (!confirm(`Spend 20 Gems to mark this goal as done for ${date}?`)) return;
+        setModalConfig({
+            isOpen: true,
+            title: 'Catch Up?',
+            content: <p>Spend <b>20 Gems</b> to mark this goal as done for <b>{date}</b>?</p>,
+            onConfirm: async () => {
+                try {
+                    const data = await api.catchUp(goalId, date, user.id);
+                    setGems(data.gems);
+                    setGoals(currentGoals => currentGoals.map(g => {
+                        if (g.id !== goalId) return g;
+                        return { ...g, completedDates: data.goal.completedDates };
+                    }));
 
-        try {
-            const data = await api.catchUp(goalId, date, user.id);
-            // Update local state
-            setGems(data.gems);
-
-            // Refetch or update goals locally
-            setGoals(currentGoals => currentGoals.map(g => {
-                if (g.id !== goalId) return g;
-                return {
-                    ...g,
-                    completedDates: data.goal.completedDates
-                };
-            }));
-
-            // Update user in local storage to persist gems
-            const updatedUser = { ...user, gems: data.gems };
-            localStorage.setItem('user', JSON.stringify(updatedUser));
-
-        } catch (err: any) {
-            console.error("Catch Up failed", err);
-            alert(err.message || "Failed to catch up");
-        }
+                    const updatedUser = { ...user, gems: data.gems };
+                    localStorage.setItem('user', JSON.stringify(updatedUser));
+                    closeModal();
+                } catch (err: any) {
+                    setModalConfig({
+                        isOpen: true,
+                        title: 'Error',
+                        content: <p>{err.message || "Failed to catch up"}</p>,
+                        type: 'danger'
+                    });
+                }
+            }
+        });
     };
 
     const handleToggleToday = async (goalId: string) => {
@@ -119,26 +142,29 @@ export function Dashboard() {
         if (!goal) return;
 
         try {
-            // Toggle completion
             const response = await api.toggleGoal(goalId, today);
             const updatedGoal = response.goal;
             const newGemCount = response.gems;
 
             if (newGemCount !== null && newGemCount !== undefined) {
                 setGems(newGemCount);
-                // Update user in local storage
                 const updatedUser = { ...user, gems: newGemCount, lastDailyReward: today };
                 localStorage.setItem('user', JSON.stringify(updatedUser));
-                alert("🎉 All tasks done! You earned 10 Gems! 💎");
+
+                setModalConfig({
+                    isOpen: true,
+                    title: 'Great Start! �',
+                    content: <div style={{ textAlign: 'center' }}>
+                        <p style={{ fontSize: '1.2rem', margin: '10px 0' }}>First task of the day completed!</p>
+                        <p style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--primary)' }}>+10 Gems 💎</p>
+                    </div>,
+                    type: 'success'
+                });
             }
 
-            // Update local state
             setGoals(currentGoals => currentGoals.map(g => {
                 if (g.id !== goalId) return g;
-                return {
-                    ...g,
-                    completedDates: updatedGoal.completedDates
-                };
+                return { ...g, completedDates: updatedGoal.completedDates };
             }));
 
         } catch (err) {
@@ -300,6 +326,23 @@ export function Dashboard() {
                 onUploadRequest={handleUploadRequest}
                 currentStyle={selectedDate ? dateStyles[selectedDate] : undefined}
             />
+
+            <Modal
+                isOpen={modalConfig.isOpen}
+                onClose={closeModal}
+                title={modalConfig.title}
+                type={modalConfig.type}
+                actions={modalConfig.onConfirm ? (
+                    <>
+                        <button onClick={closeModal} className="btn-cancel">Cancel</button>
+                        <button onClick={modalConfig.onConfirm} className="btn-save">Confirm</button>
+                    </>
+                ) : (
+                    <button onClick={closeModal} className="btn-save">Okay!</button>
+                )}
+            >
+                {modalConfig.content}
+            </Modal>
 
             <input
                 type="file"
