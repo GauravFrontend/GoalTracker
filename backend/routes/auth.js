@@ -17,6 +17,28 @@ router.post('/register', async (req, res) => {
     }
 });
 
+// GET Current User Data (Syncs gems, etc.)
+router.get('/me', async (req, res) => {
+    try {
+        const { userId } = req.query;
+        if (!userId) return res.status(400).json({ error: "UserId required" });
+
+        const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ error: "User not found" });
+
+        // Return safe user data
+        res.json({
+            id: user._id,
+            username: user.username,
+            email: user.email,
+            gems: user.gems,
+            lastDailyReward: user.lastDailyReward
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;

@@ -1,5 +1,6 @@
 import express from 'express';
 import Goal from '../models/Goal.js';
+import User from '../models/User.js';
 
 const router = express.Router();
 
@@ -67,24 +68,69 @@ router.patch('/:id/toggle', async (req, res) => {
             // Already completed -> Unmark
             goal.completedDates.splice(index, 1);
         }
-
         await goal.save();
-        res.json(goal);
+
+        // -- Daily Reward Logic --
+        // Check if ALL tasks for this 'date' are complete
+        // Only run this check if we just COMPLETED a task (added date)
+        let newGemCount = null;
+        if (index === -1) {
+            const user = await User.findById(goal.userId);
+
+            // If reward not already claimed for this date
+            if (user.lastDailyReward !== date) {
+                // Find all active goals for this date
+                // 1. One-time goals for this date
+                // 2. Recurring goals active during this date
+                const allGoals = await Goal.find({ userId: goal.userId });
+
+                const goalsForDate = allGoals.filter(g => {
+                    if (g.type === 'one-time') return g.startDate === date;
+                    if (g.type === 'recurring') return date >= g.startDate && (!g.endDate || date <= g.endDate);
+                    return false;
+                });
+
+                const allComplete = goalsForDate.every(g => g.completedDates.includes(date));
+
+                if (allComplete && goalsForDate.length > 0) {
+                    user.gems += 10;
+                    user.lastDailyReward = date;
+                    await user.save();
+                    newGemCount = user.gems;
+                }
+            }
+        }
+
+        res.json({ goal, gems: newGemCount }); // Return new gem count if updated
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// UPDATE a goal (e.g. for "Catch Up" feature)
-router.put('/:id', async (req, res) => {
+// CATCH UP: Mark a past goal as done (Costs 20 Gems)
+router.post('/:id/catchup', async (req, res) => {
     try {
-        const { title, createdAt } = req.body;
-        const goal = await Goal.findByIdAndUpdate(
-            req.params.id,
-            { $set: { title, createdAt } },
-            { new: true }
-        );
-        res.json(goal);
+        const { date, userId } = req.body; // Date to mark as done
+
+        const user = await User.findById(userId);
+        if (user.gems < 20) {
+            return res.status(400).json({ error: "Not enough gems! Need 20." });
+        }
+
+        const goal = await Goal.findById(req.params.id);
+        if (!goal) return res.status(404).json({ error: "Goal not found" });
+
+        // Add date if not exists
+        if (!goal.completedDates.includes(date)) {
+            goal.completedDates.push(date);
+            await goal.save();
+
+            // Deduct gems
+            user.gems -= 20;
+            await user.save();
+        }
+
+        res.json({ goal, gems: user.gems });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

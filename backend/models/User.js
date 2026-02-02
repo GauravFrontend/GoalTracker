@@ -15,6 +15,14 @@ const userSchema = new mongoose.Schema({
     password: {
         type: String,
         required: true
+    },
+    gems: {
+        type: Number,
+        default: 20
+    },
+    lastDailyReward: {
+        type: String, // YYYY-MM-DD
+        default: null
     }
 }, { timestamps: true });
 

@@ -11,6 +11,11 @@ export const api = {
         return handleResponse(response);
     },
 
+    getUser: async (userId: string) => {
+        const response = await fetch(`${BASE_URL}/me?userId=${userId}`);
+        return handleResponse(response);
+    },
+
     register: async (credentials: any) => {
         const response = await fetch(`${BASE_URL}/register`, {
             method: 'POST',
@@ -49,11 +54,11 @@ export const api = {
         return handleResponse(response);
     },
 
-    updateGoal: async (id: string, updates: any) => {
-        const response = await fetch(`${BASE_URL}/goals/${id}`, {
-            method: 'PUT',
+    catchUp: async (goalId: string, date: string, userId: string) => {
+        const response = await fetch(`${BASE_URL}/goals/${goalId}/catchup`, {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(updates),
+            body: JSON.stringify({ date, userId }),
         });
         return handleResponse(response);
     }

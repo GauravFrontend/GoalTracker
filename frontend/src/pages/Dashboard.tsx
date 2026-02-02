@@ -54,7 +54,14 @@ export function Dashboard() {
         if (!user || !user.id) {
             navigate('/login');
         } else {
+            // Load goals and User data (to sync gems)
             loadGoals();
+            api.getUser(user.id).then(userData => {
+                setGems(userData.gems);
+                setLastDailyReward(userData.lastDailyReward);
+                // Update local storage to keep it fresh
+                localStorage.setItem('user', JSON.stringify({ ...user, ...userData }));
+            }).catch(err => console.error("Failed to sync user", err));
         }
     }, []);
 
@@ -68,31 +75,72 @@ export function Dashboard() {
         navigate('/login');
     };
 
+    const [gems, setGems] = useState(user.gems || 20); // Initialize from user data logic or default
+    // const [lastDailyReward, setLastDailyReward] = useState(user.lastDailyReward);
+    // Unused state variable, but setter is used in useEffect to sync. 
+    // We can just omit the variable destructuring if truly unused.
+    const [, setLastDailyReward] = useState(user.lastDailyReward);
+
+    const handleCatchUp = async (goalId: string, date: string) => {
+        if (gems < 20) {
+            alert("Not enough gems! You need 20 gems to catch up.");
+            return;
+        }
+
+        if (!confirm(`Spend 20 Gems to mark this goal as done for ${date}?`)) return;
+
+        try {
+            const data = await api.catchUp(goalId, date, user.id);
+            // Update local state
+            setGems(data.gems);
+
+            // Refetch or update goals locally
+            setGoals(currentGoals => currentGoals.map(g => {
+                if (g.id !== goalId) return g;
+                return {
+                    ...g,
+                    completedDates: data.goal.completedDates
+                };
+            }));
+
+            // Update user in local storage to persist gems
+            const updatedUser = { ...user, gems: data.gems };
+            localStorage.setItem('user', JSON.stringify(updatedUser));
+
+        } catch (err: any) {
+            console.error("Catch Up failed", err);
+            alert(err.message || "Failed to catch up");
+        }
+    };
+
     const handleToggleToday = async (goalId: string) => {
         const today = format(new Date(), 'yyyy-MM-dd');
         const goal = goals.find(g => g.id === goalId);
         if (!goal) return;
 
         try {
-            if (goal.createdAt < today) {
-                // "Catch Up" logic: Move goal to today
-                await api.updateGoal(goalId, { createdAt: today });
-                // We could just reload goals or optimistically update
-                // Reload is safer to sync state
-                await loadGoals();
-            } else {
-                // Toggle completion
-                const updatedGoal = await api.toggleGoal(goalId, today);
+            // Toggle completion
+            const response = await api.toggleGoal(goalId, today);
+            const updatedGoal = response.goal;
+            const newGemCount = response.gems;
 
-                // Update local state
-                setGoals(currentGoals => currentGoals.map(g => {
-                    if (g.id !== goalId) return g;
-                    return {
-                        ...g,
-                        completedDates: updatedGoal.completedDates
-                    };
-                }));
+            if (newGemCount !== null && newGemCount !== undefined) {
+                setGems(newGemCount);
+                // Update user in local storage
+                const updatedUser = { ...user, gems: newGemCount, lastDailyReward: today };
+                localStorage.setItem('user', JSON.stringify(updatedUser));
+                alert("🎉 All tasks done! You earned 10 Gems! 💎");
             }
+
+            // Update local state
+            setGoals(currentGoals => currentGoals.map(g => {
+                if (g.id !== goalId) return g;
+                return {
+                    ...g,
+                    completedDates: updatedGoal.completedDates
+                };
+            }));
+
         } catch (err) {
             console.error("Failed to toggle goal", err);
         }
@@ -241,12 +289,7 @@ export function Dashboard() {
         return false;
     });
 
-    const previousGoals = goals.filter(g => {
-        if (g.type === 'one-time') return g.startDate < todayStr;
-        // Recurring goals that ENDED before today
-        if (g.type === 'recurring') return g.endDate && g.endDate < todayStr;
-        return false;
-    });
+
 
     return (
         <div className="app-layout">
@@ -282,19 +325,44 @@ export function Dashboard() {
                 </div>
 
                 <div className="sidebar-section">
-                    <h3>Previous Goals</h3>
+                    <h3>Missed Goals (Yesterday)</h3>
                     <div className="sidebar-list">
-                        {previousGoals.length === 0 && <p className="empty-msg">No overdue goals!</p>}
-                        {previousGoals.map(g => (
-                            <div key={g.id} className="mini-goal-card">
-                                <span className="mini-title">{g.title}</span>
-                                <span className="mini-date">{g.createdAt}</span>
-                                <button className="mini-action" onClick={() => handleToggleToday(g.id)}>
-                                    Catch Up
-                                </button>
-                            </div>
-                        ))}
+                        {/* Logic to find missed goals for Yesterday specifically, for simplicity */}
+                        {(() => {
+                            const yesterday = format(addDays(new Date(), -1), 'yyyy-MM-dd');
+
+                            const missedGoals = goals.filter(g => {
+                                const isDone = g.completedDates.includes(yesterday);
+                                if (isDone) return false;
+
+                                if (g.type === 'one-time') return g.startDate === yesterday;
+                                if (g.type === 'recurring') return yesterday >= g.startDate && (!g.endDate || yesterday <= g.endDate);
+                                return false;
+                            });
+
+                            if (missedGoals.length === 0) return <p className="empty-msg">No missed goals yesterday!</p>;
+
+                            return missedGoals.map(g => (
+                                <div key={g.id} className="mini-goal-card">
+                                    <span className="mini-title">{g.title}</span>
+                                    <span className="mini-date">{yesterday}</span>
+                                    <button
+                                        className="mini-action"
+                                        onClick={() => handleCatchUp(g.id, yesterday)}
+                                        disabled={gems < 20}
+                                        style={{ opacity: gems < 20 ? 0.5 : 1 }}
+                                    >
+                                        Catch Up (20 💎)
+                                    </button>
+                                </div>
+                            ));
+                        })()}
                     </div>
+                </div>
+
+                <div className="gem-wallet" style={{ margin: '20px 0', padding: '15px', background: '#fff0f5', borderRadius: '12px', textAlign: 'center' }}>
+                    <span style={{ fontSize: '1.5rem', display: 'block' }}>💎 {gems}</span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 700 }}>Your Gems</span>
                 </div>
 
                 <div style={{ padding: '20px 0', borderTop: '1px solid var(--accent)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
