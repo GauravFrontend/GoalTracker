@@ -34,4 +34,10 @@ router.post('/login', async (req, res) => {
     }
 });
 
+router.post('/logout', (req, res) => {
+    // In a session-based or cookie-based app, you would clear the cookie/session here.
+    // For now, we just send a success response.
+    res.status(200).json({ message: "Logged out successfully" });
+});
+
 export default router; 

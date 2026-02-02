@@ -1,91 +1,78 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
+import { api } from '../services/api';
 
 export function Signup() {
-    const [username, setUsername] = useState('');
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const navigate = useNavigate();
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
 
-    const handleSignup = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
 
-        try {
-            const response = await fetch('http://localhost:5000/api/register', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ username, email, password }),
-            });
+    try {
+      await api.register({ username, email, password });
+      navigate('/login');
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong. Is the backend running?');
+    }
+  };
 
-            const data = await response.json();
+  return (
+    <div className="auth-container">
+      <div className="auth-card">
+        <div className="brand">
+          <Sparkles size={32} />
+          <h1>Glow Goals</h1>
+        </div>
+        <h2>Join the Glow Up! ✨</h2>
 
-            if (response.ok) {
-                // Redirect to login after successful signup
-                navigate('/login');
-            } else {
-                setError(data.error || 'Signup failed');
-            }
-        } catch (err) {
-            setError('Something went wrong. Is the backend running?');
-        }
-    };
+        {error && <div className="error-msg">{error}</div>}
 
-    return (
-        <div className="auth-container">
-            <div className="auth-card">
-                <div className="brand">
-                    <Sparkles size={32} />
-                    <h1>Glow Goals</h1>
-                </div>
-                <h2>Join the Glow Up! ✨</h2>
+        <form onSubmit={handleSignup}>
+          <div className="input-group">
+            <label>Username</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+            />
+          </div>
 
-                {error && <div className="error-msg">{error}</div>}
+          <div className="input-group">
+            <label>Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
 
-                <form onSubmit={handleSignup}>
-                    <div className="input-group">
-                        <label>Username</label>
-                        <input
-                            type="text"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            required
-                        />
-                    </div>
+          <div className="input-group">
+            <label>Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
 
-                    <div className="input-group">
-                        <label>Email</label>
-                        <input
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                        />
-                    </div>
+          <button type="submit" className="btn-primary">Sign Up</button>
+        </form>
 
-                    <div className="input-group">
-                        <label>Password</label>
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            required
-                        />
-                    </div>
+        <p className="switch-auth">
+          Already have an account? <Link to="/login">Login</Link>
+        </p>
+      </div>
 
-                    <button type="submit" className="btn-primary">Sign Up</button>
-                </form>
-
-                <p className="switch-auth">
-                    Already have an account? <Link to="/login">Login</Link>
-                </p>
-            </div>
-
-            <style>{`
+      <style>{`
         .auth-container {
           min-height: 100vh;
           display: flex;
@@ -194,6 +181,6 @@ export function Signup() {
           font-size: 0.9rem;
         }
       `}</style>
-        </div>
-    );
+    </div>
+  );
 }

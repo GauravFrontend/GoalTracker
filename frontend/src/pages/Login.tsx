@@ -1,86 +1,70 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
+import { api } from '../services/api';
 
 export function Login() {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const navigate = useNavigate();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
 
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
 
-        try {
-            const response = await fetch('http://localhost:5000/api/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ email, password }),
-            });
+    try {
+      const data = await api.login({ email, password });
 
-            const data = await response.json();
+      // Save user info (simplified for this task)
+      localStorage.setItem('user', JSON.stringify(data.user));
+      navigate('/');
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong. Is the backend running?');
+    }
+  };
 
-            if (response.ok) {
-                // Save user info (simplified for this task)
-                localStorage.setItem('user', JSON.stringify(data.user));
+  return (
+    <div className="auth-container">
+      <div className="auth-card">
+        <div className="brand">
+          <Sparkles size={32} />
+          <h1>Glow Goals</h1>
+        </div>
+        <h2>Welcome Back! ✨</h2>
 
-                // Use a custom event or check in App to update state, 
-                // but since we navigate, App will re-render if it checks localStorage on mount/route change.
-                // Actually, better to reload or have App context. 
-                // For now, let's just navigate.
-                navigate('/');
-            } else {
-                setError(data.error || 'Login failed');
-            }
-        } catch (err) {
-            setError('Something went wrong. Is the backend running?');
-        }
-    };
+        {error && <div className="error-msg">{error}</div>}
 
-    return (
-        <div className="auth-container">
-            <div className="auth-card">
-                <div className="brand">
-                    <Sparkles size={32} />
-                    <h1>Glow Goals</h1>
-                </div>
-                <h2>Welcome Back! ✨</h2>
+        <form onSubmit={handleLogin}>
+          <div className="input-group">
+            <label>Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
 
-                {error && <div className="error-msg">{error}</div>}
+          <div className="input-group">
+            <label>Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
 
-                <form onSubmit={handleLogin}>
-                    <div className="input-group">
-                        <label>Email</label>
-                        <input
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                        />
-                    </div>
+          <button type="submit" className="btn-primary">Login</button>
+        </form>
 
-                    <div className="input-group">
-                        <label>Password</label>
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            required
-                        />
-                    </div>
+        <p className="switch-auth">
+          Don't have an account? <Link to="/signup">Sign Up</Link>
+        </p>
+      </div>
 
-                    <button type="submit" className="btn-primary">Login</button>
-                </form>
-
-                <p className="switch-auth">
-                    Don't have an account? <Link to="/signup">Sign Up</Link>
-                </p>
-            </div>
-
-            <style>{`
+      <style>{`
         .auth-container {
           min-height: 100vh;
           display: flex;
@@ -189,6 +173,6 @@ export function Login() {
           font-size: 0.9rem;
         }
       `}</style>
-        </div>
-    );
+    </div>
+  );
 }

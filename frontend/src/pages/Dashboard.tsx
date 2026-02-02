@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { GoalCard } from '../components/GoalCard';
 import { Heatmap } from '../components/Heatmap';
-import { Plus, Sparkles, Menu, X } from 'lucide-react';
+import { Plus, Sparkles, Menu, X, LogOut } from 'lucide-react';
 import { format, addDays } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
 
 import { dummyGoals } from '../data/dummyGoals';
 import { CustomizationModal } from '../components/CustomizationModal';
@@ -19,6 +21,22 @@ export function Dashboard() {
     const [newGoalTitle, setNewGoalTitle] = useState('');
     const [showAddForm, setShowAddForm] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const navigate = useNavigate();
+
+    const handleLogout = async () => {
+        try {
+            // Optional: Call backend to acknowledge logout
+            await api.logout();
+        } catch (error) {
+            console.error("Logout API failed", error);
+        }
+
+        // Clear local storage
+        localStorage.removeItem('user');
+
+        // Redirect to login
+        navigate('/login');
+    };
 
     // Load from LocalStorage on mount
     useEffect(() => {
@@ -270,7 +288,7 @@ export function Dashboard() {
                     </div>
                 </div>
 
-                <div style={{ padding: '20px 0' }}>
+                <div style={{ padding: '20px 0', borderTop: '1px solid var(--accent)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <button
                         onClick={() => {
                             if (confirm('Replace current goals with demo data?')) {
@@ -290,6 +308,28 @@ export function Dashboard() {
                         }}
                     >
                         🔄 Load Demo Data
+                    </button>
+
+                    <button
+                        onClick={handleLogout}
+                        style={{
+                            width: '100%',
+                            padding: '10px',
+                            background: 'white',
+                            border: '1px solid var(--primary)',
+                            borderRadius: '8px',
+                            fontSize: '0.9rem',
+                            cursor: 'pointer',
+                            color: 'var(--primary)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            fontWeight: 600
+                        }}
+                    >
+                        <LogOut size={16} />
+                        Logout
                     </button>
                 </div>
             </aside>
